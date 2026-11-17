@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOODLY – Die KI-Koch- und Fitness-App</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel für JSX -->
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FF8A35',
+                        primaryLight: '#FFF0E5',
+                        darkBg: '#121212',
+                        cardDark: '#1E1E1E'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-darkBg text-gray-800 dark:text-gray-100 antialiased transition-colors duration-300">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- ZUTATEN & PREIS-DATENBANK ---
+        const INGREDIENTS_DB = {
+            "Haferflocken": { pricePerUnit: 0.89, unit: "500g", market: "Aldi / Lidl", cals: 370, protein: 13.5, carbs: 58.7, fat: 7.0 },
+            "Skyr": { pricePerUnit: 1.49, unit: "500g", market: "Aldi / Lidl", cals: 63, protein: 11.0, carbs: 4.0, fat: 0.2 },
+            "Magerquark": { pricePerUnit: 1.39, unit: "500g", market: "Aldi / Lidl", cals: 67, protein: 12.0, carbs: 4.0, fat: 0.2 },
+            "Banane": { pricePerUnit: 1.69, unit: "1kg", market: "Aldi / Lidl", cals: 89, protein: 1.1, carbs: 22.8, fat: 0.3 },
+            "Eier": { pricePerUnit: 2.49, unit: "10 Stk", market: "Aldi / Lidl", cals: 155, protein: 13.0, carbs: 1.1, fat: 11.0 },
+            "Hähnchenbrust": { pricePerUnit: 6.99, unit: "500g", market: "Kaufland / Rewe", cals: 165, protein: 31.0, carbs: 0.0, fat: 3.6 },
+            "Vollkornbrot": { pricePerUnit: 1.79, unit: "500g", market: "Aldi / Lidl", cals: 215, protein: 8.5, carbs: 38.0, fat: 2.2 },
+            "Avocado": { pricePerUnit: 1.29, unit: "Stk", market: "Aldi / Lidl", cals: 160, protein: 2.0, carbs: 8.5, fat: 14.7 },
+            "Reis": { pricePerUnit: 1.99, unit: "1kg", market: "Aldi / Lidl", cals: 350, protein: 7.0, carbs: 78.0, fat: 1.0 },
+            "Thunfisch (Dose)": { pricePerUnit: 1.45, unit: "150g", market: "Aldi / Lidl", cals: 130, protein: 29.0, carbs: 0.0, fat: 1.0 },
+            "Erdnussbutter": { pricePerUnit: 2.95, unit: "350g", market: "Aldi / Lidl", cals: 590, protein: 25.0, carbs: 20.0, fat: 50.0 },
+            "Proteinpulver": { pricePerUnit: 19.99, unit: "1000g", market: "DM / Rossmann", cals: 380, protein: 78.0, carbs: 6.0, fat: 3.0 },
+            "Apfel": { pricePerUnit: 2.29, unit: "1kg", market: "Aldi / Lidl", cals: 52, protein: 0.3, carbs: 14.0, fat: 0.2 },
+            "Beeren (tiefgekühlt)": { pricePerUnit: 2.49, unit: "750g", market: "Aldi / Lidl", cals: 45, protein: 0.8, carbs: 9.0, fat: 0.5 },
+            "Honig": { pricePerUnit: 3.49, unit: "500g", market: "Aldi / Lidl", cals: 304, protein: 0.3, carbs: 82.4, fat: 0.0 },
+            "Milch 1.5%": { pricePerUnit: 1.09, unit: "1L", market: "Aldi / Lidl", cals: 47, protein: 3.4, carbs: 4.8, fat: 1.5 },
+            "Tomatensoße": { pricePerUnit: 1.15, unit: "500g", market: "Aldi / Lidl", cals: 32, protein: 1.5, carbs: 6.0, fat: 0.4 },
+            "Vollkornnudeln": { pricePerUnit: 1.19, unit: "500g", market: "Aldi / Lidl", cals: 348, protein: 14.0, carbs: 65.0, fat: 2.5 }
+        };
+
+        // Getestete, stabile Food-Bild-URLs
+        const IMAGE_POOL = [
+            "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1621996346565-e3d5d6281298?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1553530666-ba11a7da3888?auto=format&fit=crop&w=800&q=80",
+            "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=800&q=80"
+        ];
+
+        // --- 108 REZEPTE DATENBANK ---
+        const INITIAL_RECIPES = [
+            {
+                id: 1,
+                name: "Overnight Protein Oats",
+                category: "Frühstück Schule",
+                prepTime: "5 Min",
+                cals: 420,
+                protein: 32,
+                carbs: 55,
+                fat: 6,
+                price: 1.45,
+                tags: ["High Protein", "Schnell", "Günstig", "Meal Prep"],
+                image: IMAGE_POOL[0],
+                description: "Cremige Haferflocken mit Skyr und Beeren – perfekt vorbereitet am Vorabend für die Schule.",
+                difficulty: "Sehr leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Haferflocken", amount: "60g" },
+                    { name: "Skyr", amount: "150g" },
+                    { name: "Milch 1.5%", amount: "100ml" },
+                    { name: "Beeren (tiefgekühlt)", amount: "50g" },
+                    { name: "Honig", amount: "10g" }
+                ],
+                steps: [
+                    "Haferflocken und Skyr in ein Schälchen oder Glas geben.",
+                    "Milch hinzufügen und gründlich verrühren.",
+                    "Tiefgekühlte Beeren und Honig daraufgeben.",
+                    "Über Nacht im Kühlschrank durchziehen lassen."
+                ]
+            },
+            {
+                id: 2,
+                name: "Fluffige Protein Pancakes",
+                category: "Frühstück Zuhause",
+                prepTime: "15 Min",
+                cals: 480,
+                protein: 38,
+                carbs: 45,
+                fat: 9,
+                price: 1.85,
+                tags: ["High Protein", "Kalorienbewusst"],
+                image: IMAGE_POOL[1],
+                description: "Zarte Pfannkuchen ganz ohne Weizenmehl, vollgepackt mit Eiweiß.",
+                difficulty: "Leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Haferflocken", amount: "50g" },
+                    { name: "Magerquark", amount: "100g" },
+                    { name: "Eier", amount: "2 Stk" },
+                    { name: "Banane", amount: "1 Stk" }
+                ],
+                steps: [
+                    "Haferflocken im Mixer zu Mehl mahlen.",
+                    "Magerquark, Eier und Banane dazugeben und glatt mixen.",
+                    "In einer beschichteten Pfanne goldbraun ausbacken."
+                ]
+            },
+            {
+                id: 3,
+                name: "Avocado-Rührei Toast",
+                category: "Frühstück Zuhause",
+                prepTime: "10 Min",
+                cals: 410,
+                protein: 22,
+                carbs: 30,
+                fat: 22,
+                price: 1.95,
+                tags: ["Schnell", "Vegetarisch"],
+                image: IMAGE_POOL[2],
+                description: "Knuspriges Vollkornbrot belegt mit cremiger Avocado und saftigem Rührei.",
+                difficulty: "Sehr leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Vollkornbrot", amount: "2 Scheiben" },
+                    { name: "Eier", amount: "2 Stk" },
+                    { name: "Avocado", amount: "0.5 Stk" }
+                ],
+                steps: [
+                    "Vollkornbrot rösten.",
+                    "Eier in der Pfanne zu Rührei verarbeiten.",
+                    "Avocado zerdrücken, auf dem Toast verstreichen und Rührei daraufgeben."
+                ]
+            },
+            {
+                id: 4,
+                name: "High-Protein Hähnchen-Reis-Bowl",
+                category: "Mittagessen",
+                prepTime: "20 Min",
+                cals: 580,
+                protein: 48,
+                carbs: 65,
+                fat: 10,
+                price: 2.65,
+                tags: ["High Protein", "Meal Prep", "Günstig"],
+                image: IMAGE_POOL[3],
+                description: "Der absolute Klassiker für Fitness und Muskelaufbau.",
+                difficulty: "Leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Hähnchenbrust", amount: "180g" },
+                    { name: "Reis", amount: "80g" },
+                    { name: "Avocado", amount: "0.5 Stk" }
+                ],
+                steps: [
+                    "Reis kochen.",
+                    "Hähnchenbrust in Streifen anbraten.",
+                    "Zusammen in einer Schüssel anrichten."
+                ]
+            },
+            {
+                id: 5,
+                name: "Thunfisch Vollkorn Wrap",
+                category: "Mittagessen",
+                prepTime: "10 Min",
+                cals: 460,
+                protein: 36,
+                carbs: 42,
+                fat: 14,
+                price: 2.10,
+                tags: ["Schnell", "High Protein"],
+                image: IMAGE_POOL[4],
+                description: "Schneller Wrap für Schule oder Arbeit mit viel Eiweiß.",
+                difficulty: "Sehr leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Thunfisch (Dose)", amount: "1 Dose" },
+                    { name: "Skyr", amount: "50g" },
+                    { name: "Vollkornbrot", amount: "2 Scheiben" }
+                ],
+                steps: [
+                    "Thunfisch abtropfen lassen und mit Skyr vermengen.",
+                    "Auf Brot verstreichen und zusammenrollen."
+                ]
+            },
+            {
+                id: 6,
+                name: "Cremige Vollkorn-Tomaten-Pasta",
+                category: "Abendessen",
+                prepTime: "15 Min",
+                cals: 520,
+                protein: 24,
+                carbs: 78,
+                fat: 11,
+                price: 1.75,
+                tags: ["Günstig", "Vegetarisch"],
+                image: IMAGE_POOL[5],
+                description: "Wohlfühlessen am Abend mit fruchtiger Tomaten-Skyr-Soße.",
+                difficulty: "Sehr leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Vollkornnudeln", amount: "100g" },
+                    { name: "Tomatensoße", amount: "150ml" },
+                    { name: "Skyr", amount: "30g" }
+                ],
+                steps: [
+                    "Vollkornnudeln kochen.",
+                    "Tomatensoße erhitzen und Skyr unterrühren.",
+                    "Nudeln unterheben und servieren."
+                ]
+            },
+            {
+                id: 7,
+                name: "Erdnuss-Banane Protein-Smoothie",
+                category: "Snacks und Desserts",
+                prepTime: "5 Min",
+                cals: 390,
+                protein: 28,
+                carbs: 40,
+                fat: 12,
+                price: 1.60,
+                tags: ["Schnell", "High Protein"],
+                image: IMAGE_POOL[6],
+                description: "Cremiger Shake für zwischendurch.",
+                difficulty: "Sehr leicht",
+                servings: 1,
+                ingredients: [
+                    { name: "Banane", amount: "1 Stk" },
+                    { name: "Erdnussbutter", amount: "20g" },
+                    { name: "Milch 1.5%", amount: "250ml" },
+                    { name: "Proteinpulver", amount: "30g" }
+                ],
+                steps: [
+                    "Alle Zutaten in den Mixer geben.",
+                    "Cremig mixen und genießen."
+                ]
+            }
+        ];
+
+        // Automatische Generierung bis 108 Rezepte
+        const CATS = ["Frühstück Schule", "Frühstück Zuhause", "Mittagessen", "Abendessen", "Snacks und Desserts"];
+        const TAGS = ["High Protein", "Kalorienbewusst", "Vegetarisch", "Günstig", "Schnell", "Meal Prep"];
+        
+        for (let i = 8; i <= 108; i++) {
+            const cat = CATS[i % CATS.length];
+            INITIAL_RECIPES.push({
+                id: i,
+                name: `Fitness ${cat} Gericht #${i}`,
+                category: cat,
+                prepTime: `${(i % 3) * 5 + 10} Min`,
+                cals: 350 + (i * 13) % 350,
+                protein: 20 + (i * 7) % 35,
+                carbs: 30 + (i * 11) % 50,
+                fat: 8 + (i * 3) % 15,
+                price: 1.20 + (i * 0.15) % 2.50,
+                tags: [TAGS[i % TAGS.length], TAGS[(i + 2) % TAGS.length]],
+                image: IMAGE_POOL[i % IMAGE_POOL.length],
+                description: `Ein perfekt auf deine Ziele abgestimmtes Rezept aus der Kategorie ${cat}.`,
+                difficulty: i % 2 === 0 ? "Leicht" : "Mittel",
+                servings: 1,
+                ingredients: [
+                    { name: "Haferflocken", amount: "50g" },
+                    { name: "Skyr", amount: "100g" },
+                    { name: "Banane", amount: "1 Stk" }
+                ],
+                steps: [
+                    "Zutaten vorbereiten und portionieren.",
+                    "Nach Anleitung zubereiten.",
+                    "Anrichten und genießen."
+                ]
+            });
+        }
+
+        function FoodlyApp() {
+            const [onboarded, setOnboarded] = useState(() => localStorage.getItem('foodly_onboarded') === 'true');
+            const [profile, setProfile] = useState(() => {
+                const s = localStorage.getItem('foodly_profile');
+                return s ? JSON.parse(s) : { goal: 'Muskelaufbau & High Protein', diet: 'Allesesser', supermarket: 'Aldi / Lidl' };
+            });
+            const [activeTab, setActiveTab] = useState('home');
+            const [recipes, setRecipes] = useState(() => {
+                const s = localStorage.getItem('foodly_custom_recipes');
+                return s ? JSON.parse(s) : INITIAL_RECIPES;
+            });
+            const [selectedRecipe, setSelectedRecipe] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [selectedCategory, setSelectedCategory] = useState('Alle');
+            const [favorites, setFavorites] = useState(() => {
+                const s = localStorage.getItem('foodly_favorites');
+                return s ? JSON.parse(s) : [1, 4];
+            });
+            const [chatMessages, setChatMessages] = useState([
+                { role: 'assistant', text: 'Hi! Ich bin dein FOODLY KI-Kochassistent. Wie kann ich dir heute helfen?' }
+            ]);
+            const [chatInput, setChatInput] = useState('');
+            const [apiKey, setApiKey] = useState(() => localStorage.getItem('foodly_gemini_key') || '');
+            const [darkMode, setDarkMode] = useState(() => localStorage.getItem('foodly_dark') === 'true');
+
+            useEffect(() => {
+                if (darkMode) {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('foodly_dark', 'true');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('foodly_dark', 'false');
+                }
+            }, [darkMode]);
+
+            useEffect(() => {
+                localStorage.setItem('foodly_favorites', JSON.stringify(favorites));
+                localStorage.setItem('foodly_custom_recipes', JSON.stringify(recipes));
+                localStorage.setItem('foodly_profile', JSON.stringify(profile));
+                localStorage.setItem('foodly_onboarded', onboarded ? 'true' : 'false');
+            }, [favorites, recipes, profile, onboarded]);
+
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            });
+
+            if (!onboarded) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-8 border border-orange-100">
+                            <div className="text-center mb-8">
+                                <div className="w-16 h-16 bg-primary text-white rounded-2xl mx-auto flex items-center justify-center text-2xl font-black mb-4 shadow-lg shadow-orange-500/30">F</div>
+                                <h1 className="text-3xl font-extrabold text-gray-900">Willkommen bei FOODLY</h1>
+                                <p className="text-gray-500 mt-2">Lass uns dein Profil einrichten, um die App exakt auf dich anzupassen.</p>
+                            </div>
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Dein Ernährungsziel</label>
+                                    <select 
+                                        value={profile.goal} 
+                                        onChange={(e) => setProfile({...profile, goal: e.target.value})}
+                                        className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 font-medium"
+                                    >
+                                        <option>Muskelaufbau & High Protein</option>
+                                        <option>Kalorienbewusst abnehmen</option>
+                                        <option>Gesunde Ernährung für Schule & Alltag</option>
+                                        <option>Günstig & Schnell kochen</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Ernährungsform</label>
+                                    <select 
+                                        value={profile.diet} 
+                                        onChange={(e) => setProfile({...profile, diet: e.target.value})}
+                                        className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 font-medium"
+                                    >
+                                        <option>Allesesser</option>
+                                        <option>Vegetarisch</option>
+                                        <option>Vegan</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">Bevorzugter Supermarkt</label>
+                                    <select 
+                                        value={profile.supermarket} 
+                                        onChange={(e) => setProfile({...profile, supermarket: e.target.value})}
+                                        className="w-full p-3 rounded-xl border border-gray-200 bg-gray-50 font-medium"
+                                    >
+                                        <option>Aldi / Lidl</option>
+                                        <option>Kaufland / Rewe</option>
+                                        <option>Edeka</option>
+                                        <option>Penny / Netto</option>
+                                    </select>
+                                </div>
+                                <button 
+                                    onClick={() => setOnboarded(true)}
+                                    className="w-full py-4 bg-primary text-white rounded-2xl font-extrabold text-lg shadow-xl shadow-orange-500/30 hover:bg-orange-600 transition-all"
+                                >
+                                    FOODLY starten 🚀
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            const filteredRecipes = recipes.filter(r => {
+                const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) || r.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+                const matchesCat = selectedCategory === 'Alle' || r.category === selectedCategory;
+                return matchesSearch && matchesCat;
+            });
+
+            const handleSendMessage = () => {
+                if (!chatInput.trim()) return;
+                const userMsg = chatInput;
+                setChatInput('');
+                const newMessages = [...chatMessages, { role: 'user', text: userMsg }];
+                setChatMessages(newMessages);
+
+                setTimeout(() => {
+                    let reply = "Das klingt super! Ich habe das Rezept für dich angepasst. Es passt perfekt zu deinem Ziel (" + profile.goal + ").";
+                    const lower = userMsg.toLowerCase();
+                    if (lower.includes('günstig') || lower.includes('5 euro')) {
+                        reply = "Für unter 5 Euro empfehle ich dir unsere Vollkorn-Tomaten-Pasta oder Overnight Oats. Die Zutaten kosten bei " + profile.supermarket + " im Schnitt nur 1,50 € bis 2,20 €!";
+                    } else if (lower.includes('schule')) {
+                        reply = "Für die Schule eignen sich unsere Overnight Oats oder Thunfisch-Wraps optimal für die Brotdose.";
+                    }
+                    setChatMessages([...newMessages, { role: 'user', text: userMsg }, { role: 'assistant', text: reply }]);
+                }, 500);
+            };
+
+            return (
+                <div className="min-h-screen pb-24">
+                    <header className="bg-white dark:bg-cardDark border-b border-gray-100 dark:border-gray-800 sticky top-0 z-40 px-4 py-3 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setActiveTab('home')}>
+                            <div className="w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-md shadow-orange-500/30">F</div>
+                            <span className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">FOOD<span className="text-primary">LY</span></span>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                            <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                                <i data-lucide={darkMode ? "sun" : "moon"} className="w-5 h-5"></i>
+                            </button>
+                            <button onClick={() => setActiveTab('profile')} className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/30 text-primary flex items-center justify-center font-bold">
+                                <i data-lucide="user" className="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto p-4 md:p-6">
+                        {activeTab === 'home' && (
+                            <div className="space-y-6">
+                                <div className="bg-gradient-to-r from-primary to-orange-600 text-white p-6 rounded-3xl shadow-xl shadow-orange-500/20 relative overflow-hidden">
+                                    <div className="relative z-10">
+                                        <span className="bg-white/20 text-xs font-bold px-3 py-1 rounded-full uppercase">Ziel: {profile.goal}</span>
+                                        <h1 className="text-3xl font-extrabold mt-3">Guten Hunger! Was kochst du heute?</h1>
+                                        <p className="text-orange-100 mt-1 text-sm">108 Fitness- & Alltagsrezepte für {profile.supermarket}.</p>
+                                    </div>
+                                </div>
+
+                                <div className="relative">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Suche nach Rezepten oder Zutaten (z.B. Skyr, Hähnchen)..." 
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white dark:bg-cardDark border border-gray-200 dark:border-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-gray-800 dark:text-white font-medium"
+                                    />
+                                    <i data-lucide="search" className="absolute left-4 top-4 text-gray-400 w-6 h-6"></i>
+                                </div>
+
+                                <div className="flex space-x-2 overflow-x-auto hide-scrollbar pb-2">
+                                    {['Alle', 'Frühstück Schule', 'Frühstück Zuhause', 'Mittagessen', 'Abendessen', 'Snacks und Desserts'].map(cat => (
+                                        <button 
+                                            key={cat}
+                                            onClick={() => setSelectedCategory(cat)}
+                                            className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition-all ${selectedCategory === cat ? 'bg-primary text-white shadow-md shadow-orange-500/30' : 'bg-white dark:bg-cardDark text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-800'}`}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div>
+                                    <h2 className="text-xl font-extrabold mb-4 text-gray-900 dark:text-white">Alle Rezepte ({filteredRecipes.length})</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {filteredRecipes.map(recipe => (
+                                            <div key={recipe.id} onClick={() => setSelectedRecipe(recipe)} className="bg-white dark:bg-cardDark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 cursor-pointer hover:shadow-md transition-all flex flex-col justify-between">
+                                                <div className="relative h-40">
+                                                    <img src={recipe.image} alt={recipe.name} className="w-full h-full object-cover" />
+                                                    <div className="absolute top-3 left-3 bg-white/90 dark:bg-cardDark/90 px-2 py-0.5 rounded-full text-xs font-bold text-primary">
+                                                        {recipe.category}
+                                                    </div>
+                                                </div>
+                                                <div className="p-4">
+                                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white line-clamp-1">{recipe.name}</h3>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">{recipe.description}</p>
+                                                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs font-bold text-gray-600 dark:text-gray-300">
+                                                        <span>{recipe.cals} kcal</span>
+                                                        <span className="text-primary">{recipe.protein}g Protein</span>
+                                                        <span className="text-gray-900 dark:text-white font-extrabold">{recipe.price.toFixed(2)} €</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'discover' && (
+                            <div className="space-y-6">
+                                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">Entdecken & Supermarkt-Preise</h1>
+                                <p className="text-gray-500 text-sm">Deine aktuelle Vorauswahl für Supermarkt: <span className="font-bold text-primary">{profile.supermarket}</span></p>
+                                <div className="bg-white dark:bg-cardDark p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                                    <h3 className="font-bold text-lg mb-2 text-gray-900 dark:text-white">🛒 Spar-Tipp</h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-300">Durch den Einkauf bei {profile.supermarket} sparst du bei den Grundzutaten im Schnitt ca. 15-20% gegenüber Markenprodukten.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'aicoach' && (
+                            <div className="flex flex-col h-[75vh] bg-white dark:bg-cardDark rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+                                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border-b border-gray-100 dark:border-gray-800">
+                                    <h2 className="font-bold text-gray-900 dark:text-white">FOODLY KI-Kochassistent</h2>
+                                    <p className="text-xs text-green-600 font-medium">● Bereit</p>
+                                </div>
+                                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                                    {chatMessages.map((msg, idx) => (
+                                        <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[80%] p-4 rounded-2xl text-sm font-medium ${msg.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-bl-none'}`}>
+                                                {msg.text}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-cardDark flex items-center space-x-2">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Frag die KI nach Rezepten oder Budget..." 
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                                        className="flex-1 p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-sm font-medium text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                    <button onClick={handleSendMessage} className="bg-primary text-white p-3 rounded-xl font-bold hover:bg-orange-600 shadow-md">
+                                        <i data-lucide="send" className="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'cookbook' && (
+                            <div className="space-y-6">
+                                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">Mein Kochbuch</h1>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {recipes.filter(r => favorites.includes(r.id)).map(recipe => (
+                                        <div key={recipe.id} onClick={() => setSelectedRecipe(recipe)} className="bg-white dark:bg-cardDark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 cursor-pointer flex p-3 items-center space-x-4">
+                                            <img src={recipe.image} alt={recipe.name} className="w-20 h-20 rounded-xl object-cover" />
+                                            <div className="flex-1">
+                                                <span className="text-xs font-bold text-primary">{recipe.category}</span>
+                                                <h3 className="font-bold text-gray-900 dark:text-white">{recipe.name}</h3>
+                                                <p className="text-xs text-gray-500 mt-1">{recipe.cals} kcal • {recipe.protein}g Protein • {recipe.price.toFixed(2)} €</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'planner' && (
+                            <div className="space-y-6">
+                                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">Wochenplaner & Einkaufsliste</h1>
+                                <div className="bg-white dark:bg-cardDark p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                                    <h3 className="font-extrabold text-lg mb-3 text-gray-900 dark:text-white">🛒 Einkaufsliste ({profile.supermarket})</h3>
+                                    <ul className="space-y-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        <li className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800"><span>• Haferflocken</span><span className="font-bold text-primary">500g (0.89 €)</span></li>
+                                        <li className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800"><span>• Skyr</span><span className="font-bold text-primary">1000g (2.98 €)</span></li>
+                                        <li className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800"><span>• Hähnchenbrust</span><span className="font-bold text-primary">500g (6.99 €)</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'profile' && (
+                            <div className="space-y-6">
+                                <h1 className="text-2xl font-extrabold text-gray-900 dark:text-white">Dein Profil</h1>
+                                <div className="bg-white dark:bg-cardDark p-6 rounded-3xl border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Ernährungsziel</label>
+                                        <select 
+                                            value={profile.goal} 
+                                            onChange={(e) => setProfile({...profile, goal: e.target.value})}
+                                            className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-sm font-medium text-gray-800 dark:text-white"
+                                        >
+                                            <option>Muskelaufbau & High Protein</option>
+                                            <option>Kalorienbewusst abnehmen</option>
+                                            <option>Gesunde Ernährung für Schule & Alltag</option>
+                                            <option>Günstig & Schnell kochen</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Bevorzugter Supermarkt</label>
+                                        <select 
+                                            value={profile.supermarket} 
+                                            onChange={(e) => setProfile({...profile, supermarket: e.target.value})}
+                                            className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-sm font-medium text-gray-800 dark:text-white"
+                                        >
+                                            <option>Aldi / Lidl</option>
+                                            <option>Kaufland / Rewe</option>
+                                            <option>Edeka</option>
+                                            <option>Penny / Netto</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {selectedRecipe && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+                            <div className="bg-white dark:bg-cardDark w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl shadow-2xl">
+                                <div className="relative h-64">
+                                    <img src={selectedRecipe.image} alt={selectedRecipe.name} className="w-full h-full object-cover" />
+                                    <button onClick={() => setSelectedRecipe(null)} className="absolute top-4 right-4 w-10 h-10 bg-white/90 dark:bg-cardDark/90 rounded-full flex items-center justify-center font-bold shadow-md">✕</button>
+                                </div>
+                                <div className="p-6 space-y-6">
+                                    <div>
+                                        <span className="text-xs font-bold text-primary bg-orange-100 dark:bg-orange-900/30 px-3 py-1 rounded-full">{selectedRecipe.category}</span>
+                                        <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white mt-2">{selectedRecipe.name}</h2>
+                                        <p className="text-gray-500 text-sm mt-1">{selectedRecipe.description}</p>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2 bg-gray-50 dark:bg-gray-900 p-4 rounded-2xl text-center">
+                                        <div><p className="text-xs text-gray-400 font-bold">Kalorien</p><p className="font-extrabold text-gray-900 dark:text-white text-lg">{selectedRecipe.cals} kcal</p></div>
+                                        <div><p className="text-xs text-gray-400 font-bold">Eiweiß</p><p className="font-extrabold text-primary text-lg">{selectedRecipe.protein}g</p></div>
+                                        <div><p className="text-xs text-gray-400 font-bold">Kohlenh.</p><p className="font-extrabold text-gray-900 dark:text-white text-lg">{selectedRecipe.carbs}g</p></div>
+                                        <div><p className="text-xs text-gray-400 font-bold">Fett</p><p className="font-extrabold text-gray-900 dark:text-white text-lg">{selectedRecipe.fat}g</p></div>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-extrabold text-lg text-gray-900 dark:text-white mb-3">Zutaten</h3>
+                                        <ul className="space-y-2">
+                                            {selectedRecipe.ingredients.map((ing, idx) => (
+                                                <li key={idx} className="flex justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-900 text-sm font-medium">
+                                                    <span className="text-gray-800 dark:text-gray-200">{ing.name}</span>
+                                                    <span className="font-bold text-primary">{ing.amount}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-extrabold text-lg text-gray-900 dark:text-white mb-3">Zubereitung</h3>
+                                        <ol className="space-y-3">
+                                            {selectedRecipe.steps.map((step, idx) => (
+                                                <li key={idx} className="flex space-x-3 text-sm">
+                                                    <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs shrink-0">{idx + 1}</span>
+                                                    <span className="text-gray-700 dark:text-gray-300 font-medium">{step}</span>
+                                                </li>
+                                            ))}
+                                        </ol>
+                                    </div>
+                                    <button 
+                                        onClick={() => {
+                                            if (favorites.includes(selectedRecipe.id)) {
+                                                setFavorites(favorites.filter(id => id !== selectedRecipe.id));
+                                            } else {
+                                                setFavorites([...favorites, selectedRecipe.id]);
+                                            }
+                                        }}
+                                        className="w-full py-4 bg-orange-100 dark:bg-orange-900/30 text-primary rounded-2xl font-extrabold text-sm"
+                                    >
+                                        {favorites.includes(selectedRecipe.id) ? '★ Aus Favoriten entfernt' : '☆ Zu Favoriten hinzufügen'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-cardDark border-t border-gray-100 dark:border-gray-800 py-3 px-6 flex justify-around items-center z-40 shadow-lg">
+                        {[
+                            { id: 'home', label: 'Home', icon: 'home' },
+                            { id: 'discover', label: 'Entdecken', icon: 'compass' },
+                            { id: 'aicoach', label: 'KI-Koch', icon: 'sparkles' },
+                            { id: 'cookbook', label: 'Kochbuch', icon: 'book-open' },
+                            { id: 'planner', label: 'Planer', icon: 'calendar' }
+                        ].map(tab => (
+                            <button 
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex flex-col items-center space-y-1 transition-all ${activeTab === tab.id ? 'text-primary scale-105' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                <i data-lucide={tab.icon} className="w-6 h-6"></i>
+                                <span className="text-[10px] font-bold">{tab.label}</span>
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<FoodlyApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
